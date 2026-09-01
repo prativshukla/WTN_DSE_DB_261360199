@@ -1,0 +1,187 @@
+1. Create the Bank Table
+CREATE TABLE Bank (
+    Account_Number NUMBER CONSTRAINT pk_bank_acc PRIMARY KEY,
+    Bank_Name     VARCHAR2(30) CONSTRAINT nn_bank_name NOT NULL,
+    Amount        NUMBER(10, 2) CONSTRAINT nn_bank_amount NOT NULL
+);
+2. Create the Bank_Transaction Package
+Package Specification:
+CREATE OR REPLACE PACKAGE Bank_Transaction IS
+    PROCEDURE NEW_ACCOUNT (
+        p_acc_no IN Bank.Account_Number%TYPE,
+        p_bname  IN Bank.Bank_Name%TYPE,
+        p_amt    IN Bank.Amount%TYPE
+    );
+
+    PROCEDURE Account_Transaction (
+        p_acc_no   IN Bank.Account_Number%TYPE,
+        p_tx_amt   IN NUMBER,
+        p_tx_type  IN VARCHAR2
+    );
+
+    PROCEDURE Close_Account (
+        p_acc_no IN Bank.Account_Number%TYPE
+    );
+END Bank_Transaction;
+/
+Package Body:
+CREATE OR REPLACE PACKAGE BODY Bank_Transaction IS
+
+    -- d. Private Function: Returns TRUE if Account Number exists, else FALSE
+    FUNCTION Return_Boolean (
+        p_acc_no IN Bank.Account_Number%TYPE
+    ) RETURN BOOLEAN IS
+        v_cnt NUMBER;
+    BEGIN
+        SELECT COUNT(1)
+        INTO v_cnt
+        FROM Bank
+        WHERE Account_Number = p_acc_no;
+
+        RETURN (v_cnt > 0);
+    END Return_Boolean;
+
+    -- a. Procedure: NEW_ACCOUNT
+    PROCEDURE NEW_ACCOUNT (
+        p_acc_no IN Bank.Account_Number%TYPE,
+        p_bname  IN Bank.Bank_Name%TYPE,
+        p_amt    IN Bank.Amount%TYPE
+    ) IS
+        e_acc_exists    EXCEPTION;
+        e_low_init_bal  EXCEPTION;
+    BEGIN
+        IF Return_Boolean(p_acc_no) THEN
+            RAISE e_acc_exists;
+        END IF;
+
+        IF p_amt < 5000 THEN
+            RAISE e_low_init_bal;
+        END IF;
+
+        INSERT INTO Bank (Account_Number, Bank_Name, Amount)
+        VALUES (p_acc_no, p_bname, p_amt);
+
+        DBMS_OUTPUT.PUT_LINE('Account ' || p_acc_no || ' created successfully.');
+    EXCEPTION
+        WHEN e_acc_exists THEN
+            DBMS_OUTPUT.PUT_LINE('Error: Account number ' || p_acc_no || ' already exists.');
+        WHEN e_low_init_bal THEN
+            DBMS_OUTPUT.PUT_LINE('Error: Minimum initial deposit of 5000 required.');
+        WHEN OTHERS THEN
+            DBMS_OUTPUT.PUT_LINE('Error in NEW_ACCOUNT: ' || SQLERRM);
+    END NEW_ACCOUNT;
+
+    -- b. Procedure: Account_Transaction
+    PROCEDURE Account_Transaction (
+        p_acc_no   IN Bank.Account_Number%TYPE,
+        p_tx_amt   IN NUMBER,
+        p_tx_type  IN VARCHAR2
+    ) IS
+        v_curr_amt     Bank.Amount%TYPE;
+        e_no_acc       EXCEPTION;
+        e_min_bal      EXCEPTION;
+        e_invalid_type EXCEPTION;
+    BEGIN
+        IF NOT Return_Boolean(p_acc_no) THEN
+            RAISE e_no_acc;
+        END IF;
+
+        SELECT Amount INTO v_curr_amt 
+        FROM Bank 
+        WHERE Account_Number = p_acc_no;
+
+        IF UPPER(p_tx_type) = 'WITHDRAWAL' THEN
+            IF (v_curr_amt - p_tx_amt) < 5000 THEN
+                RAISE e_min_bal;
+            ELSE
+                UPDATE Bank
+                SET Amount = Amount - p_tx_amt
+                WHERE Account_Number = p_acc_no;
+                DBMS_OUTPUT.PUT_LINE('Withdrawal successful. Updated Balance: ' || (v_curr_amt - p_tx_amt));
+            END IF;
+        ELSIF UPPER(p_tx_type) = 'DEPOSIT' THEN
+            UPDATE Bank
+            SET Amount = Amount + p_tx_amt
+            WHERE Account_Number = p_acc_no;
+            DBMS_OUTPUT.PUT_LINE('Deposit successful. Updated Balance: ' || (v_curr_amt + p_tx_amt));
+        ELSE
+            RAISE e_invalid_type;
+        END IF;
+    EXCEPTION
+        WHEN e_no_acc THEN
+            DBMS_OUTPUT.PUT_LINE('Error: Account number ' || p_acc_no || ' does not exist.');
+        WHEN e_min_bal THEN
+            DBMS_OUTPUT.PUT_LINE('Transaction Failed: Minimum balance of 5000 must be maintained.');
+        WHEN e_invalid_type THEN
+            DBMS_OUTPUT.PUT_LINE('Error: Invalid Transaction Type. Use "Withdrawal" or "Deposit".');
+        WHEN OTHERS THEN
+            DBMS_OUTPUT.PUT_LINE('Error in Account_Transaction: ' || SQLERRM);
+    END Account_Transaction;
+
+    -- c. Procedure: Close_Account
+    PROCEDURE Close_Account (
+        p_acc_no IN Bank.Account_Number%TYPE
+    ) IS
+        e_no_acc EXCEPTION;
+    BEGIN
+        IF NOT Return_Boolean(p_acc_no) THEN
+            RAISE e_no_acc;
+        END IF;
+
+        DELETE FROM Bank
+        WHERE Account_Number = p_acc_no;
+
+        DBMS_OUTPUT.PUT_LINE('Account ' || p_acc_no || ' deleted successfully.');
+    EXCEPTION
+        WHEN e_no_acc THEN
+            DBMS_OUTPUT.PUT_LINE('Error: Account number ' || p_acc_no || ' does not exist.');
+        WHEN OTHERS THEN
+            DBMS_OUTPUT.PUT_LINE('Error in Close_Account: ' || SQLERRM);
+    END Close_Account;
+
+END Bank_Transaction;
+/
+3. Create the Audit_Table
+CREATE TABLE Audit_Table (
+    Account_Number   NUMBER,
+    Transaction_Date TIMESTAMP,
+    Transaction_Type CHAR(1)
+);
+4. Create Audit Trigger on Bank Table
+CREATE OR REPLACE TRIGGER trg_bank_audit
+AFTER INSERT OR UPDATE OR DELETE ON Bank
+FOR EACH ROW
+BEGIN
+    IF INSERTING THEN
+        INSERT INTO Audit_Table (Account_Number, Transaction_Date, Transaction_Type)
+        VALUES (:NEW.Account_Number, SYSTIMESTAMP, 'I');
+    ELSIF UPDATING THEN
+        INSERT INTO Audit_Table (Account_Number, Transaction_Date, Transaction_Type)
+        VALUES (:OLD.Account_Number, SYSTIMESTAMP, 'U');
+    ELSIF DELETING THEN
+        INSERT INTO Audit_Table (Account_Number, Transaction_Date, Transaction_Type)
+        VALUES (:OLD.Account_Number, SYSTIMESTAMP, 'D');
+    END IF;
+END;
+/
+Testing & Execution Block
+SET SERVEROUTPUT ON;
+
+-- 1. Create a new account
+EXEC Bank_Transaction.NEW_ACCOUNT(1001, 'HDFC Bank', 10000);
+
+-- 2. Perform Deposit
+EXEC Bank_Transaction.Account_Transaction(1001, 2000, 'Deposit');
+
+-- 3. Perform Withdrawal (Allowed)
+EXEC Bank_Transaction.Account_Transaction(1001, 3000, 'Withdrawal');
+
+-- 4. Perform Withdrawal (Fails due to 5000 min balance rule)
+EXEC Bank_Transaction.Account_Transaction(1001, 5000, 'Withdrawal');
+
+-- 5. Close Account
+EXEC Bank_Transaction.Close_Account(1001);
+
+-- 6. Check Audit Logs
+SELECT * FROM Audit_Table ORDER BY Transaction_Date;
+
