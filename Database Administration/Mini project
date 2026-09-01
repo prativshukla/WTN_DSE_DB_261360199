@@ -1,0 +1,90 @@
+1. Create the STOCK_EMPNO Table
+CREATE TABLE STOCK_EMPNO (
+    pno   NUMBER(5) CONSTRAINT pk_stock_empno PRIMARY KEY,
+    pname VARCHAR2(50) CONSTRAINT nn_stock_pname NOT NULL,
+    price NUMBER(10, 2),
+    qty   NUMBER(10)
+); 
+2. Insert Data into STOCK_EMPNO
+INSERT INTO STOCK_EMPNO (pno, pname, price, qty) VALUES (101, 'RIN', 100, 1000);
+INSERT INTO STOCK_EMPNO (pno, pname, price, qty) VALUES (102, 'NIRMA', 200, 1500);
+INSERT INTO STOCK_EMPNO (pno, pname, price, qty) VALUES (103, 'VIM', 160, 2000);
+COMMIT;
+3. Analyze the STOCK_EMPNO Table
+BEGIN
+    DBMS_STATS.GATHER_TABLE_STATS(
+        ownname => USER,
+        tabname => 'STOCK_EMPNO'
+    ); 
+END; 
+/
+4. Create Function to Return Total Amount (price * qty)
+CREATE OR REPLACE FUNCTION GET_TOTAL_AMOUNT 
+RETURN NUMBER IS
+    v_total NUMBER;
+BEGIN
+    SELECT SUM(price * qty)
+    INTO v_total
+    FROM STOCK_EMPNO;
+
+    RETURN v_total;
+END;
+/
+
+-- Test execution
+SELECT GET_TOTAL_AMOUNT AS total_stock_amount FROM dual; 
+5. Check Severe Warnings by Omitting RETURN Value
+-- Enable SEVERE PL/SQL compiler warnings
+ALTER SESSION SET PLSQL_WARNINGS = 'ENABLE:SEVERE';
+
+-- Create function without a RETURN statement in execution flow
+CREATE OR REPLACE FUNCTION GET_TOTAL_AMOUNT_WARN 
+RETURN NUMBER IS
+    v_total NUMBER;
+BEGIN
+    SELECT SUM(price * qty)
+    INTO v_total
+    FROM STOCK_EMPNO; 
+    -- Intentionally missing RETURN v_total statement
+END; 
+/
+
+-- View compiler warning output
+SHOW ERRORS FUNCTION GET_TOTAL_AMOUNT_WARN;
+6. Create Procedure to Display All PNO Using BULK COLLECT
+CREATE OR REPLACE PROCEDURE DISP_ALL_PNO IS
+    TYPE t_pno IS TABLE OF STOCK_EMPNO.pno%TYPE;
+    v_pnos t_pno;
+BEGIN
+    SELECT pno 
+    BULK COLLECT INTO v_pnos 
+    FROM STOCK_EMPNO;
+
+    DBMS_OUTPUT.PUT_LINE('--- STOCK PNO LIST ---');
+    FOR i IN 1..v_pnos.COUNT LOOP
+        DBMS_OUTPUT.PUT_LINE('PNO: ' || v_pnos(i));
+    END FOR;
+END; 
+/
+
+-- Test execution
+SET SERVEROUTPUT ON;
+EXEC DISP_ALL_PNO;
+7. Create Procedure to Delete Records via Dynamic SQL
+CREATE OR REPLACE PROCEDURE DELETE_STOCK_RECORDS (
+    p_table_name IN VARCHAR2
+) IS
+    v_sql VARCHAR2(200); 
+BEGIN
+    -- Dynamic SQL execution using SQL injection prevention
+    v_sql := 'DELETE FROM ' || DBMS_ASSERT.ENQUOTE_NAME(p_table_name);
+    
+    EXECUTE IMMEDIATE v_sql;
+    DBMS_OUTPUT.PUT_LINE('Successfully deleted ' || SQL%ROWCOUNT || ' rows from table: ' || p_table_name);
+END; 
+/
+
+-- Test execution
+SET SERVEROUTPUT ON;
+EXEC DELETE_STOCK_RECORDS('STOCK_EMPNO');
+
