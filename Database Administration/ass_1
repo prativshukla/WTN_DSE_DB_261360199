@@ -1,0 +1,52 @@
+#Hands-on Assignments for Database Instance
+	•	Connect as sys Data database user and shut down the database.
+QUERY: - 
+sqlplus / as sysdba
+       SHUTDOWN IMMEDIATE;
+
+	•	Startup the Database.
+QUERY: - 
+-- Step 1: Connect to Oracle as SYSDBA from the OS terminal
+sqlplus / as sysdba
+
+-- Step 2: Issue the startup command
+STARTUP;
+
+	•	Write a command to locate the SPFILE
+QUERY: - 
+Option 1: Using SHOW PARAMETER (SQL*Plus / SQLcl)
+SHOW PARAMETER SPFILE;
+Option 2: Using a SQL Query on V$PARAMETER
+SELECT value FROM v$parameter WHERE name = 'spfile';
+
+
+	•	Write a query to locate all the redo log files.
+QUERY: - 
+Option 1: Basic Query (File Paths & Status)
+SELECT group#, 
+       type, 
+       member AS file_path, 
+       status 
+FROM v$logfile;
+
+Option 2: Detailed Query (Includes Log Size & Group Status)
+SELECT f.group#,
+       f.member AS file_path,
+       l.bytes / 1024 / 1024 AS size_mb,
+       l.status AS group_status,
+       f.status AS file_status
+FROM v$logfile f
+JOIN v$log l ON f.group# = l.group#
+ORDER BY f.group#;
+
+
+	•	Write a query to know the Database Name
+QUERY: - 
+Option 1: Query V$DATABASE (Primary Database Name)
+SELECT name FROM v$database;
+Option 2: Query GLOBAL_NAME (Global Database Name)
+SELECT * FROM global_name;
+Option 3: Using SHOW PARAMETER (SQL*Plus / SQLcl)
+SHOW PARAMETER db_name;
+
+
