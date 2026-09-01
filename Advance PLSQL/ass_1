@@ -1,0 +1,59 @@
+# Hands-on Assignments for Stored Procedures and Functions
+	•	Create a procedure to accept an empno as a input parameter and display the detail like ename,sal and deptno.
+QUERY: - 
+CREATE OR REPLACE PROCEDURE get_emp_details (
+    p_empno IN emp.empno%TYPE
+) IS
+    v_ename  emp.ename%TYPE;
+    v_sal    emp.sal%TYPE;
+    v_deptno emp.deptno%TYPE;
+BEGIN
+    SELECT ename, sal, deptno
+    INTO v_ename, v_sal, v_deptno
+    FROM emp
+    WHERE empno = p_empno;
+
+    DBMS_OUTPUT.PUT_LINE('Employee Name : ' || v_ename);
+    DBMS_OUTPUT.PUT_LINE('Salary        : ' || v_sal);
+    DBMS_OUTPUT.PUT_LINE('Department No : ' || v_deptno);
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        DBMS_OUTPUT.PUT_LINE('Error: No employee found with EMPNO ' || p_empno);
+    WHEN OTHERS THEN
+        DBMS_OUTPUT.PUT_LINE('Error: ' || SQLERRM);
+END get_emp_details;
+/
+
+
+
+
+	•	Create a function called Add_Num() that accept two paraemter of number type and return the addition result in number type.
+QUERY: - 
+CREATE OR REPLACE FUNCTION Add_Num (
+    p_num1 IN NUMBER,
+    p_num2 IN NUMBER
+) RETURN NUMBER IS
+BEGIN
+    RETURN p_num1 + p_num2;
+END Add_Num;
+/
+
+	•	Create a procedure that will display all the names list of procedures and functions from the current schema by querying user_source table with the help of cursor.
+QUERY: - 
+CREATE OR REPLACE PROCEDURE list_procs_and_funcs IS
+    CURSOR c_user_objects IS
+        SELECT DISTINCT name, type
+        FROM user_source
+        WHERE type IN ('PROCEDURE', 'FUNCTION')
+        ORDER BY type, name;
+BEGIN
+    DBMS_OUTPUT.PUT_LINE('----------------------------------------');
+    DBMS_OUTPUT.PUT_LINE('TYPE        | OBJECT NAME               ');
+    DBMS_OUTPUT.PUT_LINE('----------------------------------------');  
+    FOR rec IN c_user_objects LOOP
+        DBMS_OUTPUT.PUT_LINE(RPAD(rec.type, 11) || ' | ' || rec.name);
+    END LOOP;
+    
+    DBMS_OUTPUT.PUT_LINE('----------------------------------------');
+END list_procs_and_funcs;
+/
