@@ -1,0 +1,19 @@
+#Hands-on Assignments for Managing Dependencies
+
+1.Use the Deptree view to generate all the dependencies for DEPT table.
+QUERY: - 
+Step 1: Populate the Dependency Tree
+Populate the dependency tree for the DEPT table using the deptree_fill procedure:
+SQL
+EXEC deptree_fill('TABLE', USER, 'DEPT');
+Step 2: Query the Dependencies
+Querying the DEPTREE view:
+SELECT nested_level, 
+       type, 
+       name, 
+       seq# 
+FROM deptree 
+ORDER BY seq#;
+Querying the IDEPTREE view (displays a formatted, indented hierarchy):
+SELECT * FROM ideptree;
+
