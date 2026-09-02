@@ -1,0 +1,143 @@
+#Hands-on Assignments for Triggers
+1.Create a BEFORE trigger that will restrict the user from performing DML statements between 9 to 17  on EMP Table.
+QUERY: - 
+CREATE OR REPLACE TRIGGER restrict_emp_dml_time
+BEFORE INSERT OR UPDATE OR DELETE ON emp
+BEGIN
+    -- Check if current time is between 09:00 and 17:00 (9 AM to 5 PM)
+    IF TO_CHAR(SYSDATE, 'HH24:MI') BETWEEN '09:00' AND '17:00' THEN
+        RAISE_APPLICATION_ERROR(-20001, 'DML operations on EMP table are restricted between 09:00 AM and 05:00 PM.');
+    END IF;
+END;
+/
+
+2.Create a Audit_Emp table with columns empno, username,trdate,trtype.
+Write a trigger for DML transaction
+1.  If the user Inserts a row in the EMP table then simultaneously Insert a new row in the AUDIT_EMP table with the details of new empno, username(current user), date and time of insert and Tr_Type as ‘I’
+2. If the user updates the EMPNO then Insert a new row in the AUDIT_EMP table with the old empno, username, date and time of update and ‘U’
+3. If the user deletes the EMPNO then insert a new row in the AUDIT_EMP table with old empno, username, date and time of delete and ‘D’.
+ Make the transaction AUTONOMOUS to COMMIT. Use triggering functions INSERTING, UPDATING OR DELETING.
+QUERY: - 
+1. Create the AUDIT_EMP Table
+CREATE TABLE audit_emp (
+    empno    NUMBER(4),
+    username VARCHAR2(30),
+    trdate   DATE,
+    trtype   VARCHAR2(1)
+);
+2. Create the Autonomous Audit Trigger
+CREATE OR REPLACE TRIGGER trg_audit_emp
+AFTER INSERT OR UPDATE OR DELETE ON emp
+FOR EACH ROW
+DECLARE
+    PRAGMA AUTONOMOUS_TRANSACTION;
+BEGIN
+    IF INSERTING THEN
+        INSERT INTO audit_emp (empno, username, trdate, trtype)
+        VALUES (:NEW.empno, USER, SYSDATE, 'I');
+    ELSIF UPDATING THEN
+        INSERT INTO audit_emp (empno, username, trdate, trtype)
+        VALUES (:OLD.empno, USER, SYSDATE, 'U');
+    ELSIF DELETING THEN
+        INSERT INTO audit_emp (empno, username, trdate, trtype)
+        VALUES (:OLD.empno, USER, SYSDATE, 'D');
+    END IF;
+
+    COMMIT;
+END;
+/
+
+
+3.Create a complex view V3 that has EMPNO,ENAME, JOB,SAL,EMP.DEPTNO,DNAME,LOC from EMP,DEPT tables.
+
+Write a INSTEAD OF TRIGGER for INSERT OR UPDATE on V3 that will check for if the deptno inserted in the view does not exists in DEPT table, then it will INSERT the row in the DEPT table else it will UPDATE the DNAME,LOC of DEPT table for the corresponding DEPTNO. Again it will check if EMPNO exists or not in EMP table, if EMPNO does not exists then you have to INSERT  the EMPNO,ENAME,SAL,JOB,DEPTNO into the  EMP table else you have to UPDATE the ENAME,SAL,DEPTNO of EMP table.
+QUERY: - 
+1. Create Complex View V3
+CREATE OR REPLACE VIEW V3 AS
+SELECT e.empno,
+       e.ename,
+       e.job,
+       e.sal,
+       e.deptno,
+       d.dname,
+       d.loc
+FROM emp e
+JOIN dept d ON e.deptno = d.deptno;
+2. Create INSTEAD OF Trigger on V3
+CREATE OR REPLACE TRIGGER trg_v3_ins_upd
+INSTEAD OF INSERT OR UPDATE ON V3
+FOR EACH ROW
+DECLARE
+    v_dept_cnt NUMBER;
+    v_emp_cnt  NUMBER;
+BEGIN
+    -----------------------------------------------------
+    -- 1. DEPT Table Logic
+    -----------------------------------------------------
+    SELECT COUNT(1)
+    INTO v_dept_cnt
+    FROM dept
+    WHERE deptno = :NEW.deptno;
+
+    IF v_dept_cnt = 0 THEN
+        -- Insert new department if it does not exist
+        INSERT INTO dept (deptno, dname, loc)
+        VALUES (:NEW.deptno, :NEW.dname, :NEW.loc);
+    ELSE
+        -- Update existing department details
+        UPDATE dept
+        SET dname = :NEW.dname,
+            loc   = :NEW.loc
+        WHERE deptno = :NEW.deptno;
+    END IF;
+
+    -----------------------------------------------------
+    -- 2. EMP Table Logic
+    -----------------------------------------------------
+    SELECT COUNT(1)
+    INTO v_emp_cnt
+    FROM emp
+    WHERE empno = :NEW.empno;
+    IF v_emp_cnt = 0 THEN
+        -- Insert new employee if EMPNO does not exist
+        INSERT INTO emp (empno, ename, job, sal, deptno)
+        VALUES (:NEW.empno, :NEW.ename, :NEW.job, :NEW.sal, :NEW.deptno);
+    ELSE
+        -- Update existing employee details
+        UPDATE emp
+        SET ename  = :NEW.ename,
+            job    = :NEW.job,
+            sal    = :NEW.sal,
+            deptno = :NEW.deptno
+        WHERE empno = :NEW.empno;
+    END IF;
+END;
+/
+
+
+4.Write a SYSTEM trigger that will restrict the SCOTT user from creating only TABLES. Use ORA_DICT_OBJ_TYPE.
+QUERY: - 
+CREATE OR REPLACE TRIGGER restrict_scott_table_creation
+BEFORE CREATE ON DATABASE
+BEGIN
+    -- Check if the user is SCOTT and the object type being created is a TABLE
+    IF ORA_LOGIN_USER = 'SCOTT' AND ORA_DICT_OBJ_TYPE = 'TABLE' THEN
+        RAISE_APPLICATION_ERROR(
+            -20001, 
+            'Access Denied: User SCOTT is restricted from creating TABLES.'
+        );
+    END IF;
+END;
+/
+
+5.Create LOGON trigger that will change to default date format to DL format.
+QUERY: - 
+CREATE OR REPLACE TRIGGER trg_set_dl_date_format
+AFTER LOGON ON DATABASE
+BEGIN
+    EXECUTE IMMEDIATE 'ALTER SESSION SET NLS_DATE_FORMAT = ''DL''';
+EXCEPTION
+    WHEN OTHERS THEN
+        NULL; -- Prevents logon failures if session modification fails
+END;
+/
