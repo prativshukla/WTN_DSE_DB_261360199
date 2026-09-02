@@ -1,0 +1,265 @@
+#Hands-on Assignments for Packages
+1.Create Package PK1 with below 3 Procedures. 
+
+	•	Procedure ADD_DEPT : This procedure will take 3 IN arguments DNO,NAME,LO and duly insert 
+      these values into the DEPT table. Handle the exception if the user tries to insert a duplicate row  
+      using User Defined Exception Handler.
+	•	Procedure UPDATE_DEPT which takes 3 arguments DNO,NAME,LO. Update the DNAME,LOC for the corresponding DEPTNO. Handle exception when the user enters DEPTNO that does not exists.
+
+	•	Procedure DELETE_DEPT which takes 1 argument DNO. Delete the record for the corresponding
+ DEPTNO. Handle the required exception when the user enters a not existing DEPTNO.
+
+	•	Create a Local Function CAL_CNT that returnsTRUE if DEPTNO does not Exists ELSE return FALSE. 
+Use this Function in all 3 Procedures.Create a One Time Procedure that displays the total number of rows.
+QUERY: - 
+1. Package Specification
+CREATE OR REPLACE PACKAGE PK1 IS
+    PROCEDURE ADD_DEPT (
+        p_dno  IN dept.deptno%TYPE,
+        p_name IN dept.dname%TYPE,
+        p_lo   IN dept.loc%TYPE
+    );
+
+    PROCEDURE UPDATE_DEPT (
+        p_dno  IN dept.deptno%TYPE,
+        p_name IN dept.dname%TYPE,
+        p_lo   IN dept.loc%TYPE
+    );
+
+    PROCEDURE DELETE_DEPT (
+        p_dno IN dept.deptno%TYPE
+    );
+END PK1;
+/
+2. Package Body
+CREATE OR REPLACE PACKAGE BODY PK1 IS
+
+    -- Private Local Function: Returns TRUE if DEPTNO does NOT exist, else FALSE
+    FUNCTION CAL_CNT (
+        p_dno IN dept.deptno%TYPE
+    ) RETURN BOOLEAN IS
+        v_cnt NUMBER;
+    BEGIN
+        SELECT COUNT(1)
+        INTO v_cnt
+        FROM dept
+        WHERE deptno = p_dno;
+
+        IF v_cnt = 0 THEN
+            RETURN TRUE;  -- Does not exist
+        ELSE
+            RETURN FALSE; -- Exists
+        END IF;
+    END CAL_CNT;
+
+    -- 1. ADD_DEPT Procedure
+    PROCEDURE ADD_DEPT (
+        p_dno  IN dept.deptno%TYPE,
+        p_name IN dept.dname%TYPE,
+        p_lo   IN dept.loc%TYPE
+    ) IS
+        e_duplicate_dept EXCEPTION;
+    BEGIN
+        -- Use CAL_CNT: If FALSE, department already exists
+        IF NOT CAL_CNT(p_dno) THEN
+            RAISE e_duplicate_dept;
+        END IF;
+
+        INSERT INTO dept (deptno, dname, loc)
+        VALUES (p_dno, p_name, p_lo);
+
+        DBMS_OUTPUT.PUT_LINE('Department ' || p_dno || ' inserted successfully.');
+    EXCEPTION
+        WHEN e_duplicate_dept THEN
+            DBMS_OUTPUT.PUT_LINE('Error: Department ' || p_dno || ' already exists (Duplicate Record).');
+        WHEN OTHERS THEN
+            DBMS_OUTPUT.PUT_LINE('Error in ADD_DEPT: ' || SQLERRM);
+    END ADD_DEPT;
+
+    -- 2. UPDATE_DEPT Procedure
+    PROCEDURE UPDATE_DEPT (
+        p_dno  IN dept.deptno%TYPE,
+        p_name IN dept.dname%TYPE,
+        p_lo   IN dept.loc%TYPE
+    ) IS
+        e_dept_not_found EXCEPTION;
+    BEGIN
+        -- Use CAL_CNT: If TRUE, department does not exist
+        IF CAL_CNT(p_dno) THEN
+            RAISE e_dept_not_found;
+        END IF;
+
+        UPDATE dept
+        SET dname = p_name,
+            loc   = p_lo
+        WHERE deptno = p_dno;
+
+        DBMS_OUTPUT.PUT_LINE('Department ' || p_dno || ' updated successfully.');
+    EXCEPTION
+        WHEN e_dept_not_found THEN
+            DBMS_OUTPUT.PUT_LINE('Error: Department ' || p_dno || ' does not exist.');
+        WHEN OTHERS THEN
+            DBMS_OUTPUT.PUT_LINE('Error in UPDATE_DEPT: ' || SQLERRM);
+    END UPDATE_DEPT;
+
+    -- 3. DELETE_DEPT Procedure
+    PROCEDURE DELETE_DEPT (
+        p_dno IN dept.deptno%TYPE
+    ) IS
+        e_dept_not_found EXCEPTION;
+    BEGIN
+        -- Use CAL_CNT: If TRUE, department does not exist
+        IF CAL_CNT(p_dno) THEN
+            RAISE e_dept_not_found;
+        END IF;
+
+        DELETE FROM dept
+        WHERE deptno = p_dno;
+
+        DBMS_OUTPUT.PUT_LINE('Department ' || p_dno || ' deleted successfully.');
+    EXCEPTION
+        WHEN e_dept_not_found THEN
+            DBMS_OUTPUT.PUT_LINE('Error: Department ' || p_dno || ' does not exist.');
+        WHEN OTHERS THEN
+            DBMS_OUTPUT.PUT_LINE('Error in DELETE_DEPT: ' || SQLERRM);
+    END DELETE_DEPT;
+
+-- One Time Initialization Procedure (runs once when package is first referenced)
+BEGIN
+    DECLARE
+        v_total_rows NUMBER;
+    BEGIN
+        SELECT COUNT(1) INTO v_total_rows FROM dept;
+        DBMS_OUTPUT.PUT_LINE('========================================');
+        DBMS_OUTPUT.PUT_LINE('Package PK1 Initialized.');
+        DBMS_OUTPUT.PUT_LINE('Current Total Rows in DEPT table: ' || v_total_rows);
+        DBMS_OUTPUT.PUT_LINE('========================================');
+    END;
+END PK1;
+/
+
+
+2.Create a Package PK2 that has 2 Procedures DISP_FIRST3 and DISP_FIRST6 that will display the first 
+     3 employees  and first 6 employees from the EMP Table. Create a Global Cursor.
+QUERY: - 
+1. Package Specification
+CREATE OR REPLACE PACKAGE PK2 IS
+    -- Global Package Cursor
+    CURSOR c_emp IS 
+        SELECT empno, ename, job, sal 
+        FROM emp;
+
+    PROCEDURE DISP_FIRST3;
+    PROCEDURE DISP_FIRST6;
+END PK2;
+/
+2. Package Body
+CREATE OR REPLACE PACKAGE BODY PK2 IS
+
+    -- Procedure to display first 3 employees
+    PROCEDURE DISP_FIRST3 IS
+        v_rec c_emp%ROWTYPE;
+    BEGIN
+        IF c_emp%ISOPEN THEN
+            CLOSE c_emp;
+        END IF;
+
+        OPEN c_emp;
+        DBMS_OUTPUT.PUT_LINE('---------------- First 3 Employees ----------------');
+        FOR i IN 1..3 LOOP
+            FETCH c_emp INTO v_rec;
+            EXIT WHEN c_emp%NOTFOUND;
+            DBMS_OUTPUT.PUT_LINE('EMPNO: ' || v_rec.empno || ' | ENAME: ' || RPAD(v_rec.ename, 10) || ' | JOB: ' || RPAD(v_rec.job, 10) || ' | SAL: ' || v_rec.sal);
+        END LOOP;
+        CLOSE c_emp;
+    END DISP_FIRST3;
+
+    -- Procedure to display first 6 employees
+    PROCEDURE DISP_FIRST6 IS
+        v_rec c_emp%ROWTYPE;
+    BEGIN
+        IF c_emp%ISOPEN THEN
+            CLOSE c_emp;
+        END IF;
+
+        OPEN c_emp;
+        DBMS_OUTPUT.PUT_LINE('---------------- First 6 Employees ----------------');
+        FOR i IN 1..6 LOOP
+            FETCH c_emp INTO v_rec;
+            EXIT WHEN c_emp%NOTFOUND;
+            DBMS_OUTPUT.PUT_LINE('EMPNO: ' || v_rec.empno || ' | ENAME: ' || RPAD(v_rec.ename, 10) || ' | JOB: ' || RPAD(v_rec.job, 10) || ' | SAL: ' || v_rec.sal);
+        END LOOP;
+        CLOSE c_emp;
+    END DISP_FIRST6;
+
+END PK2;
+/
+
+
+3.Create a sequence S2 start with 1 and increment by 1. 
+   Create a package PK3 that has 2 procedures with the same name ADD_EMP. The procedure will take3 arguments EMPNO,ENAME DEFAULT ‘UNK’, SAL DEFUALT 1000. This procedure inserts these values in the EMP table. The second procedure accepts 2 arguments NAME DEFAULT ‘UNK’, SAL DEFAULT  1000 and inserts into the EMP table calling the sequence S2 for EMPNO column. Also insert other ENAME and SAL columns.
+QUERY: - 
+1. Create Sequence S2
+CREATE SEQUENCE S2
+    START WITH 1
+    INCREMENT BY 1
+    NOCACHE
+    NOCYCLE;
+2. Package Specification
+CREATE OR REPLACE PACKAGE PK3 IS
+    -- Overloaded Procedure 1: Accepts EMPNO, ENAME, and SAL
+    PROCEDURE ADD_EMP (
+        p_empno IN emp.empno%TYPE,
+        p_ename IN emp.ename%TYPE DEFAULT 'UNK',
+        p_sal   IN emp.sal%TYPE   DEFAULT 1000
+    );
+
+    -- Overloaded Procedure 2: Accepts ENAME and SAL (Uses S2.NEXTVAL for EMPNO)
+    PROCEDURE ADD_EMP (
+        p_ename IN emp.ename%TYPE DEFAULT 'UNK',
+        p_sal   IN emp.sal%TYPE   DEFAULT 1000
+    );
+END PK3;
+/
+3. Package Body
+CREATE OR REPLACE PACKAGE BODY PK3 IS
+
+    -- Procedure 1 Implementation
+    PROCEDURE ADD_EMP (
+        p_empno IN emp.empno%TYPE,
+        p_ename IN emp.ename%TYPE DEFAULT 'UNK',
+        p_sal   IN emp.sal%TYPE   DEFAULT 1000
+    ) IS
+    BEGIN
+        INSERT INTO emp (empno, ename, sal)
+        VALUES (p_empno, p_ename, p_sal);
+
+        DBMS_OUTPUT.PUT_LINE('Employee inserted successfully with explicitly provided EMPNO: ' || p_empno);
+    EXCEPTION
+        WHEN DUP_VAL_ON_INDEX THEN
+            DBMS_OUTPUT.PUT_LINE('Error: Employee ID ' || p_empno || ' already exists.');
+        WHEN OTHERS THEN
+            DBMS_OUTPUT.PUT_LINE('Error in ADD_EMP (3 params): ' || SQLERRM);
+    END ADD_EMP;
+
+    -- Procedure 2 Implementation (Using Sequence S2)
+    PROCEDURE ADD_EMP (
+        p_ename IN emp.ename%TYPE DEFAULT 'UNK',
+        p_sal   IN emp.sal%TYPE   DEFAULT 1000
+    ) IS
+        v_empno emp.empno%TYPE;
+    BEGIN
+        v_empno := S2.NEXTVAL;
+
+        INSERT INTO emp (empno, ename, sal)
+        VALUES (v_empno, p_ename, p_sal);
+
+        DBMS_OUTPUT.PUT_LINE('Employee inserted successfully with generated EMPNO: ' || v_empno);
+    EXCEPTION
+        WHEN OTHERS THEN
+            DBMS_OUTPUT.PUT_LINE('Error in ADD_EMP (2 params): ' || SQLERRM);
+    END ADD_EMP;
+
+END PK3;
+/
+
